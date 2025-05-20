@@ -129,11 +129,6 @@ handleRequest outChan req = do
                 ]
             ]
 
-    "prompts/list" ->
-        sendResult outChan (req ^. rpcRequestId) $ object
-            [ "prompts" .= object []
-            ]
-
     -- handle: {"method":"tools/call","params":{"name":"get_status","arguments":{"gameid":"PLACEHOLDER"}},"jsonrpc":"2.0","id":5}
     "tools/call" -> do
         sendResult outChan (req ^. rpcRequestId) $ object
@@ -144,5 +139,12 @@ handleRequest outChan req = do
                     ]
                 ]
             ]
+
+    "prompts/list" ->
+        sendResult outChan (req ^. rpcRequestId) $ object
+            [ "prompts" .= object []
+            ]
+
+
 
     _ -> sendError outChan (req ^. rpcRequestId) "method not implemented"
