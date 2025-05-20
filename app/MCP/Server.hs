@@ -14,20 +14,22 @@ import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.Map                   as M
 import qualified Data.Text                  as T (pack, unpack)
 
-import           MCP.Highlevel              (executePrompt, executeTool,
-                                             getPrompts'', getTools'',
-                                             invokePrompt, invokeTool)
 import           MCP.Spec
 import           MCP.Types                  (ArgumentInvocation (..),
+                                             PromptDefinition,
                                              PromptInvocation (..),
+                                             ToolDefinition,
                                              ToolInvocation (..))
 import           Optics                     ((^.))
 import           System.IO                  (BufferMode (LineBuffering),
                                              hPutStrLn, hSetBuffering, stderr,
                                              stdin, stdout)
 -- | JSON structure for params of "prompts/get"
-runMcpServerStdIn :: IO ()
-runMcpServerStdIn = do
+runMcpServerStdIn
+  :: [PromptDefinition] -> (PromptInvocation -> Either String p) -> (p -> IO String)
+  -> [ToolDefinition] -> (ToolInvocation -> Either String t) -> (t -> IO String)
+  -> IO ()
+runMcpServerStdIn prompts promptInv promptExec tools toolInv toolExec = do
   -- Claude Desktop launches the binary and speaks line‑delimited JSON over
   -- stdio.  Line buffering keeps latency low and works cross‑platform.
   hSetBuffering stdin  LineBuffering
@@ -47,7 +49,7 @@ runMcpServerStdIn = do
 
     -- Attempt to decode as a request
     case decode msg :: Maybe RpcRequest of
-      Just request -> handleRequest outChan request
+      Just request -> handleRequest prompts promptInv promptExec tools toolInv toolExec outChan request
       Nothing  ->
         case decode msg :: Maybe RpcNotification of
             Just notification -> handleNotification notification
@@ -83,8 +85,11 @@ handleNotification _notification = do
   -- Ignore notifications for now...
   pure ()
 
-handleRequest :: TChan BL.ByteString -> RpcRequest -> IO ()
-handleRequest outChan req = do
+handleRequest
+  :: [PromptDefinition] -> (PromptInvocation -> Either String p) -> (p -> IO String)
+  -> [ToolDefinition] -> (ToolInvocation -> Either String t) -> (t -> IO String)
+  -> TChan BL.ByteString -> RpcRequest -> IO ()
+handleRequest prompts promptInv promptExec tools toolInv toolExec outChan req = do
   hPutStrLn stderr $ "Received: " ++ show req
   case req ^. rpcRequestMethod of
     "initialize" ->
@@ -121,19 +126,19 @@ handleRequest outChan req = do
 
     "tools/list" -> do
         sendResult outChan (req ^. rpcRequestId) $ object
-            [ "tools"      .= getTools''
+            [ "tools"      .= tools
             ]
 
     "tools/call" -> do
         case req ^. rpcRequestParams of
           Just paramsVal
             | Just (tname, argMap) <- parseToolParams paramsVal -> do
-                let argList = [ ArgumentInvocation k v | (k,v) <- M.toList argMap ]
-                    tinv    = ToolInvocation tname argList       -- ToolInvocation iso
-                case invokeTool tinv of
+                let argList = [ MkArgumentInvocation k v | (k,v) <- M.toList argMap ]
+                    tinv    = MkToolInvocation tname argList       -- ToolInvocation iso
+                case toolInv tinv of
                   Left err    -> sendError outChan (req ^. rpcRequestId) err
                   Right tInst -> do
-                    resultStr <- executeTool tInst
+                    resultStr <- toolExec tInst
                     let resultVal = String (T.pack resultStr) :: Value
                     sendResult outChan (req ^. rpcRequestId) $ object
                         [ "content" .=
@@ -147,7 +152,7 @@ handleRequest outChan req = do
 
     "prompts/list" ->
         sendResult outChan (req ^. rpcRequestId) $ object
-            [ "prompts" .= getPrompts''
+            [ "prompts" .= prompts
             ]
 
     "prompts/get" -> do
@@ -156,12 +161,12 @@ handleRequest outChan req = do
         case req ^. rpcRequestParams of
           Just paramsVal
             | Just (pname, argMap) <- parsePromptParams paramsVal -> do
-                let argList = [ ArgumentInvocation k v | (k,v) <- M.toList argMap ]
-                    pinv    = PromptInvocation pname argList
-                case invokePrompt pinv of
+                let argList = [ MkArgumentInvocation k v | (k,v) <- M.toList argMap ]
+                    pinv    = MkPromptInvocation pname argList
+                case promptInv pinv of
                   Left err    -> sendError outChan (req ^. rpcRequestId) err
                   Right pInst -> do
-                    resultStr <- executePrompt pInst
+                    resultStr <- promptExec pInst
                     let resultVal = String (T.pack resultStr) :: Value
                     sendResult outChan (req ^. rpcRequestId) $ object
                         [ "description" .= String "Prompt result"

@@ -21,13 +21,13 @@ data PromptDefinition = MkPromptDefinition String String [PromptArgumentDefiniti
 data ToolDefinition = MkToolDefinition String String [ToolArgumentDefinition]
   deriving (Show)
 
-data ArgumentInvocation = ArgumentInvocation String String
+data ArgumentInvocation = MkArgumentInvocation String String
   deriving (Show)
 
-data PromptInvocation = PromptInvocation String [ArgumentInvocation]
+data PromptInvocation = MkPromptInvocation String [ArgumentInvocation]
   deriving (Show)
 
-data ToolInvocation = ToolInvocation String [ArgumentInvocation]
+data ToolInvocation = MkToolInvocation String [ArgumentInvocation]
   deriving (Show)
 
 type DocTable = M.Map String String

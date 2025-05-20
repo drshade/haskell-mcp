@@ -54,6 +54,8 @@ executable sfdc-mcp
   main-is: Main.hs
   -- Modules included in this executable, other than Main.
   other-modules:
+    Examples.Planets.Handlers
+    Examples.Planets.Interface
     MCP.Derive
     MCP.Highlevel
     MCP.Server

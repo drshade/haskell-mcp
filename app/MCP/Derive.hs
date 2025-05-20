@@ -1,37 +1,20 @@
 {-# LANGUAGE LambdaCase      #-}
 {-# LANGUAGE TemplateHaskell #-}
 
--- | Utilities for turning a plain algebraic data type that encodes the
---   various prompt variants into a *runtime* list of 'Prompt' values
---   understood by the rest of the application.
---
---   There are two public entry points:
---
---   @derivePrompts ''MyADT@                       – no doc strings, just stub text
---   @derivePromptsWithDocs ''MyADT 'promptDoc@   – look descriptions up in a
---                                                 value‑level 'DocTable'.
---
---   In the second form the *second* parameter is a quoted name referring to a
---   top‑level 'M.Map Name String' that maps constructor and record‑field
---   names to human‑readable descriptions.
---
 module MCP.Derive where
 
 import           Data.Char                  (isUpper, toLower)
 import qualified Data.Map.Strict            as M
-import           Language.Haskell.TH        (Body (NormalB), Con (..), Dec (..),
-                                             Exp (..), ExpQ, Info (TyConI),
-                                             Lit (StringL), Name, Pat (..), Q,
-                                             Quote (newName), Type (..), conE,
-                                             listE, litE, mkName, nameBase,
-                                             reify, stringL, varE)
-import           Language.Haskell.TH.Syntax (Bang, Clause (..), VarBangType)
+import           Language.Haskell.TH        (Bang (..), Body (NormalB),
+                                             Con (..), Dec (..), Exp (..), ExpQ,
+                                             Info (TyConI), Lit (StringL), Name,
+                                             Pat (..), Q, Quote (newName),
+                                             SourceStrictness (..),
+                                             SourceUnpackedness (..), Type (..),
+                                             conE, listE, litE, mkName,
+                                             nameBase, reify, stringL, varE)
+import           Language.Haskell.TH.Syntax (Clause (..), VarBangType)
 import           MCP.Types
-
-
--------------------------------------------------------------------------------
--- Utilities
--------------------------------------------------------------------------------
 
 snakeCase :: String -> String
 snakeCase []     = []
@@ -41,7 +24,6 @@ snakeCase (c:cs) = toLower c : go cs
     go (x:xs)            = x : go xs
     go []                = []
 
--- very naive pretty‑printer – good enough for docs
 renderTy :: Type -> String
 renderTy = \case
   ConT n        -> nameBase n
@@ -50,7 +32,6 @@ renderTy = \case
   SigT t _      -> renderTy t
   _             -> "<complex>"
 
--- | Separate a `Maybe t` into (t, True).  Anything else → (ty, False)
 stripMaybe :: Type -> (Type, Bool)
 stripMaybe (AppT (ConT n) t) | n == ''Maybe = (t, True)
 stripMaybe t                                = (t, False)
@@ -58,9 +39,9 @@ stripMaybe t                                = (t, False)
 lookupArg :: String -> [ArgumentInvocation] -> Maybe String
 lookupArg key = go
   where
-    go []                                        = Nothing
-    go (ArgumentInvocation k v : xs) | k == key  = Just v
-                                     | otherwise = go xs
+    go []                                           = Nothing
+    go (MkArgumentInvocation k v : xs) | k == key   = Just v
+                                     | otherwise    = go xs
 
 derivePrompts :: Name -> Name -> Q Exp
 derivePrompts tyName tblName =
@@ -71,10 +52,6 @@ deriveTools :: Name -> Name -> Q Exp
 deriveTools tyName tblName =
   let lookupDoc nm = let s = nameBase nm in [| M.findWithDefault ("<no doc for " ++ s ++ ">") s $(varE tblName) |]
   in deriveTools' tyName lookupDoc
-
--------------------------------------------------------------------------------
--- Core generator shared by both front‑ends
--------------------------------------------------------------------------------
 
 derivePrompts' :: Name -> (Name -> Q Exp) -> Q Exp
 derivePrompts' ty f =
@@ -87,10 +64,6 @@ deriveTools' ty f =
   deriveDefinitions ty f
       'MkToolArgumentDefinition
       'MkToolDefinition
-
--------------------------------------------------------------------------------
--- | Generic generator used by both prompt and tool derivations.
--------------------------------------------------------------------------------
 
 deriveDefinitions
   :: Name               -- ^ ADT to inspect (e.g. ''PromptInstance)
@@ -156,115 +129,66 @@ deriveDefinitions tyName lookupDoc argCon defCon = do
            $(pure docQ)
            $reqFlag |]
 
-deriveInvokePrompt :: Name -> Q [Dec]
-deriveInvokePrompt adtName = do
-  TyConI (DataD _ _ _ _ cons _) <- reify adtName
-
-  matchClauses <- mapM mkClause cons
-  fallbackClause <- mkFallback
-  let clauses = matchClauses ++ [fallbackClause]
-
-  let funName  = mkName "invokePrompt"
-      funSig   = SigD funName (AppT (AppT ArrowT (ConT ''PromptInvocation))
-                                    (AppT (AppT (ConT ''Either) (ConT ''String))
-                                          (ConT adtName)))
-      funDef   = FunD funName clauses
-  pure [funSig, funDef]
-  where
-    ----------------------------------------------------------------
-    mkClause :: Con -> Q Clause
-    ----------------------------------------------------------------
-    mkClause (RecC cName fields) = do
-      -- pattern-match on PromptInvocation "code_review" args
-      let promptId   = LitP (StringL (snakeCase (nameBase cName)))
-      argsName <- newName "args"
-      bodyExp  <- buildBody cName fields (VarE argsName)
-      pure $ Clause [ConP 'PromptInvocation [] [promptId, VarP argsName]]
-                    (NormalB bodyExp) []
-
-    mkClause c =
-      fail $ "deriveInvokePrompt: only record constructors supported, saw " ++ show c
-
-    ----------------------------------------------------------------
-    -- fallback for unknown prompt id
-    mkFallback :: Q Clause
-    mkFallback = do
-      pidVar  <- newName "pid"
-      argsVar <- newName "args"
-      errExp <- [| Left ("Unable to match " ++ $(varE pidVar) ++ " to any PromptDefinition (args " ++ show $(varE argsVar) ++ ")" ) |]
-      pure $ Clause [ConP 'PromptInvocation [] [VarP pidVar, VarP argsVar]] (NormalB errExp) []
-
-    ----------------------------------------------------------------
-    buildBody :: Name -> [VarBangType] -> Exp -> Q Exp
-    ----------------------------------------------------------------
-    buildBody conName fields argsExp = do
-      let mkField :: (Name, Bang, Type) -> Q Exp
-          mkField (fName, _, fTy) =
-            case stripMaybe fTy of
-              (_inner, True ) ->  -- optional
-                [| Right ( lookupArg $(litE $ stringL (nameBase fName))
-                                  $(pure argsExp)) |]
-              (_,     False) ->  -- required
-                [| maybe (Left ("missing field " ++ $(litE $ stringL (nameBase fName))))
-                        Right
-                        (lookupArg $(litE $ stringL (nameBase fName)) $(pure argsExp)) |]
-
-      let fieldExps :: [ExpQ]
-          fieldExps = map mkField fields
-          startExp  = [| Right $(conE conName) |]  :: ExpQ
-          chain acc nxt = [| $acc <*> $nxt |]
-          combined = foldl' chain startExp fieldExps  -- ExpQ
-      combined
-
--------------------------------------------------------------------------------
--- Generate runtime parser for tools
--------------------------------------------------------------------------------
-
-deriveInvokeTool :: Name -> Q [Dec]
-deriveInvokeTool adtName = do
+deriveInvokeGeneric
+  :: Name   -- ^ ADT to reflect (''PromptInstance or ''ToolInstance)
+  -> Name   -- ^ Invocation *type* name (''PromptInvocation)
+  -> Name   -- ^ Invocation constructor ('MkPromptInvocation)
+  -> String -- ^ Human label for error msg ("PromptDefinition" / "ToolDefinition")
+  -> Q [Dec]
+deriveInvokeGeneric adtName invTypeName invConName errLabel = do
   TyConI (DataD _ _ _ _ cons _) <- reify adtName
 
   matchClauses   <- mapM mkClause cons
   fallbackClause <- mkFallback
-  let clauses = matchClauses ++ [ fallbackClause ]
+  let clauses = matchClauses ++ [fallbackClause]
 
-  let funName  = mkName "invokeTool"
-      funSig   = SigD funName (AppT (AppT ArrowT (ConT ''ToolInvocation))
-                                   (AppT (AppT (ConT ''Either) (ConT ''String))
-                                         (ConT adtName)))
-      funDef   = FunD funName clauses
-  pure [funSig, funDef]
+  let funName = mkName ("invoke" ++ nameBase adtName)
+      funType = AppT (AppT ArrowT (ConT invTypeName))
+                     (AppT (AppT (ConT ''Either) (ConT ''String)) (ConT adtName))
+  pure [ SigD funName funType
+       , FunD funName clauses ]
   where
     ------------------------------------------------------------------
     mkClause :: Con -> Q Clause
-    mkClause (RecC cName fields) = do
-      let toolId = LitP (StringL (snakeCase (nameBase cName)))
-      argsName  <- newName "args"
-      bodyExp   <- buildBody cName fields (VarE argsName)
-      pure $ Clause [ConP 'ToolInvocation [] [toolId, VarP argsName]]
-                     (NormalB bodyExp) []
-    mkClause c = fail $ "deriveInvokeTool: only record constructors supported, saw " ++ show c
+    mkClause con = case con of
+      RecC cName fields -> mkClauseWithFields cName fields
+      NormalC cName []  -> mkClauseWithFields cName []      -- argument-less constructor
+      NormalC cName tys -> mkClauseWithFields cName (map (\t -> (mkName "_", Bang NoSourceUnpackedness NoSourceStrictness, snd t)) tys)
+      _ -> fail $ "deriveInvokeGeneric: unsupported constructor " ++ show con
+
+    -- helper that builds the clause given a name and (possibly empty) fields list
+    mkClauseWithFields :: Name -> [VarBangType] -> Q Clause
+    mkClauseWithFields cName fields = do
+      let patTag = LitP (StringL (snakeCase (nameBase cName)))
+      argsName <- newName "_args"
+      bodyExp  <- buildBody cName fields (VarE argsName)
+      pure $ Clause [ConP invConName [] [patTag, VarP argsName]] (NormalB bodyExp) []
 
     ------------------------------------------------------------------
     mkFallback :: Q Clause
     mkFallback = do
-      pidVar  <- newName "pid"
-      argsVar <- newName "args"
-      errExp  <- [| Left ("Unable to match " ++ $(varE pidVar) ++ " to any ToolDefinition (args " ++ show $(varE argsVar) ++ ")") |]
-      pure $ Clause [ConP 'ToolInvocation [] [VarP pidVar, VarP argsVar]] (NormalB errExp) []
+      pid <- newName "p"
+      as  <- newName "a"
+      err <- [| Left ("Unable to match " ++ $(varE pid) ++ " to any " ++ errLabel ++ " (args " ++ show $(varE as) ++ ")") |]
+      pure $ Clause [ConP invConName [] [VarP pid, VarP as]] (NormalB err) []
 
     ------------------------------------------------------------------
     buildBody :: Name -> [VarBangType] -> Exp -> Q Exp
     buildBody conName fields argsExp = do
       let mkField (fName, _, fTy) =
             case stripMaybe fTy of
-              (_, True)  -> [| Right (lookupArg $(litE $ stringL (nameBase fName)) $(pure argsExp)) |]
-              (_, False) -> [| maybe (Left ("missing field " ++ $(litE $ stringL (nameBase fName))))
+              (_, True ) -> [| Right (lookupArg $(litE $ stringL $ nameBase fName) $(pure argsExp)) |]
+              (_, False) -> [| maybe (Left ("missing field " ++ $(litE $ stringL $ nameBase fName)))
                                    Right
-                                   (lookupArg $(litE $ stringL (nameBase fName)) $(pure argsExp)) |]
-          fieldExps :: [ExpQ]
-          fieldExps = map mkField fields
-          startExp  = [| Right $(conE conName) |] :: ExpQ
+                                   (lookupArg $(litE $ stringL $ nameBase fName) $(pure argsExp)) |]
+          fieldQs :: [ExpQ]
+          fieldQs = map mkField fields
+          startQ  = [| Right $(conE conName) |]
           chain acc nxt = [| $acc <*> $nxt |]
-          combined = foldl' chain startExp fieldExps
-      combined
+      foldl chain startQ fieldQs
+
+deriveInvokePrompt :: Name -> Q [Dec]
+deriveInvokePrompt ty = deriveInvokeGeneric ty ''PromptInvocation 'MkPromptInvocation "PromptDefinition"
+
+deriveInvokeTool :: Name -> Q [Dec]
+deriveInvokeTool ty   = deriveInvokeGeneric ty ''ToolInvocation 'MkToolInvocation "ToolDefinition"
