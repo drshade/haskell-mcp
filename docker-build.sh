@@ -1,0 +1,1 @@
+docker build -t sfdc-mcp:latest .

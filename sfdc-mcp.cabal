@@ -64,12 +64,13 @@ executable sfdc-mcp
   -- Other library packages from which modules are imported.
   build-depends:
     aeson,
-    base ^>=4.20.0.0,
+    base,
     bytestring,
+    containers,
     optics,
     stm,
     template-haskell,
-    containers,
+    text,
 
   -- Directories containing source files.
   hs-source-dirs: app
