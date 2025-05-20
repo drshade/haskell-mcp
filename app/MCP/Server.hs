@@ -13,13 +13,14 @@ import qualified Data.ByteString.Char8      as B
 import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.Map                   as M
 import qualified Data.Text                  as T (pack, unpack)
-import           MCP.Derive                 (ArgumentInvocation (..),
-                                             PromptInvocation (PromptInvocation),
-                                             ToolInvocation (ToolInvocation))
+
 import           MCP.Highlevel              (executePrompt, executeTool,
                                              getPrompts'', getTools'',
                                              invokePrompt, invokeTool)
 import           MCP.Spec
+import           MCP.Types                  (ArgumentInvocation (..),
+                                             PromptInvocation (..),
+                                             ToolInvocation (..))
 import           Optics                     ((^.))
 import           System.IO                  (BufferMode (LineBuffering),
                                              hPutStrLn, hSetBuffering, stderr,

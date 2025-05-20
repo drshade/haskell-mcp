@@ -58,6 +58,7 @@ executable sfdc-mcp
     MCP.Highlevel
     MCP.Server
     MCP.Spec
+    MCP.Types
 
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:

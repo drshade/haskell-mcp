@@ -1,4 +1,3 @@
-{-# LANGUAGE LambdaCase      #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module MCP.Highlevel where
@@ -6,6 +5,8 @@ module MCP.Highlevel where
 import qualified Data.Map.Strict as M
 import           Data.Maybe      (fromMaybe)
 import           MCP.Derive
+import           MCP.Types
+
 
 ---- My example
 

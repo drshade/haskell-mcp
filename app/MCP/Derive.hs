@@ -17,9 +17,6 @@
 --
 module MCP.Derive where
 
-import           Data.Aeson                 (ToJSON (..), object, (.=))
-import qualified Data.Aeson                 as A
-import           Data.Aeson.Key             (fromString)
 import           Data.Char                  (isUpper, toLower)
 import qualified Data.Map.Strict            as M
 import           Language.Haskell.TH        (Body (NormalB), Con (..), Dec (..),
@@ -29,40 +26,8 @@ import           Language.Haskell.TH        (Body (NormalB), Con (..), Dec (..),
                                              listE, litE, mkName, nameBase,
                                              reify, stringL, varE)
 import           Language.Haskell.TH.Syntax (Bang, Clause (..), VarBangType)
+import           MCP.Types
 
-
-type ArgumentName = String
-type ArgumentDescription = String
-type ArgumentRequired = Bool
-
-data PromptArgumentDefinition = PromptArgumentDefinition ArgumentName ArgumentDescription ArgumentRequired
-  deriving (Show)
-
-data ToolArgumentDefinition = ToolArgumentDefinition ArgumentName ArgumentDescription ArgumentRequired
-  deriving (Show)
-
-data PromptDefinition = PromptDefinition String String [PromptArgumentDefinition]
-  deriving (Show)
-
-data ToolDefinition = ToolDefinition String String [ToolArgumentDefinition]
-  deriving (Show)
-
-data ArgumentInvocation = ArgumentInvocation String String
-  deriving (Show)
-
-data PromptInvocation = PromptInvocation String [ArgumentInvocation]
-  deriving (Show)
-
-data ToolInvocation = ToolInvocation String [ArgumentInvocation]
-  deriving (Show)
-
-
--------------------------------------------------------------------------------
--- | Friendly alias for a documentation lookup table.
---   Keys *must* be the Names of constructors or record field labels.
--------------------------------------------------------------------------------
-
-type DocTable = M.Map String String
 
 -------------------------------------------------------------------------------
 -- Utilities
@@ -111,82 +76,85 @@ deriveTools tyName tblName =
 -- Core generator shared by both front‑ends
 -------------------------------------------------------------------------------
 
-derivePrompts' :: Name            -- ^ datatype to reflect
-        -> (Name -> Q Exp) -- ^ doc lookup: key → TH Exp that yields String
-        -> Q Exp
-derivePrompts' tyName lookupDoc = do
-  TyConI (DataD _ _ _ _ cons _) <- reify tyName
-  listEs <- mapM (\case
-    RecC conName fields          -> genRecord conName fields
-    NormalC conName types        -> genPositional conName (map snd types)
-    c                            -> fail $ "Unsupported constructor: " ++ show c) cons
-  pure (ListE listEs)
-  where
-    -------------------------------------------------------------------------
-    genRecord conName fields = do
-      descrE <- lookupDoc conName
-      let argEs :: [ExpQ]
-          argEs = map mkArg fields
-              where
-                mkArg (fName, _, fTy) = do
-                  let (_innerTy, optional) = stripMaybe fTy
-                      promptId            = snakeCase (nameBase fName)
-                  docE <- lookupDoc fName
-                  let reqFlag = ConE (if optional then 'False else 'True)
-                  [| PromptArgumentDefinition $(litE $ stringL promptId)
-                                     $(pure docE)
-                                     $(pure reqFlag) |]
-      argListE <- listE argEs
-      [| PromptDefinition $(litE $ stringL (snakeCase (nameBase conName))) $(pure descrE) $(pure argListE) |]
-
-    -------------------------------------------------------------------------
-    genPositional conName tys = do
-      descrE <- lookupDoc conName
-      let argEs :: [ExpQ]
-          argEs = map mkArg (zip [1 :: Int ..] tys)
-              where
-                mkArg (ix, ty) = do
-                  let (_innerTy, optional) = stripMaybe ty
-                      fStr                = "arg_" ++ show ix
-                      fName               = mkName fStr
-                  docE <- lookupDoc fName
-                  let reqFlag = ConE (if optional then 'False else 'True)
-                  [| PromptArgumentDefinition $(litE $ stringL fStr)
-                                     $(pure docE)
-                                     $(pure reqFlag) |]
-      argListE <- listE argEs
-      [| PromptDefinition $(litE $ stringL (snakeCase (nameBase conName))) $(pure descrE) $(pure argListE) |]
+derivePrompts' :: Name -> (Name -> Q Exp) -> Q Exp
+derivePrompts' ty f =
+  deriveDefinitions ty f
+      'MkPromptArgumentDefinition
+      'MkPromptDefinition
 
 deriveTools' :: Name -> (Name -> Q Exp) -> Q Exp
-deriveTools' tyName lookupDoc = do
-  TyConI (DataD _ _ _ _ cons _) <- reify tyName
-  listEs <- mapM (\case
-    RecC conName fields -> genRecord conName fields
-    NormalC conName tys -> genPositional conName (map snd tys)
-    c -> fail $ "Unsupported constructor: " ++ show c) cons
-  pure (ListE listEs)
-  where
-    genRecord conName fields = do
-      descrE <- lookupDoc conName
-      let argEs = map mkArg fields
-            where mkArg (fName,_,fTy) = do
-                    let (_,opt) = stripMaybe fTy
-                    docE <- lookupDoc fName
-                    let reqFlag = ConE (if opt then 'False else 'True)
-                    [| ToolArgumentDefinition $(litE $ stringL (nameBase fName)) $(pure docE) $(pure reqFlag) |]
-      argListE <- listE argEs
-      [| ToolDefinition $(litE $ stringL (snakeCase (nameBase conName))) $(pure descrE) $(pure argListE) |]
+deriveTools' ty f =
+  deriveDefinitions ty f
+      'MkToolArgumentDefinition
+      'MkToolDefinition
 
-    genPositional conName tys = do
-      descrE <- lookupDoc conName
-      let argEs = map mkArg (zip [1::Int ..] tys)
-            where mkArg (ix,ty) = do
-                    let (_,opt)= stripMaybe ty; fStr = "arg_"++show ix ; fName= mkName fStr
-                    docE <- lookupDoc fName
-                    let reqFlag = ConE (if opt then 'False else 'True)
-                    [| ToolArgumentDefinition $(litE $ stringL fStr) $(pure docE) $(pure reqFlag) |]
-      argListE <- listE argEs
-      [| ToolDefinition $(litE $ stringL (snakeCase (nameBase conName))) $(pure descrE) $(pure argListE) |]
+-------------------------------------------------------------------------------
+-- | Generic generator used by both prompt and tool derivations.
+-------------------------------------------------------------------------------
+
+deriveDefinitions
+  :: Name               -- ^ ADT to inspect (e.g. ''PromptInstance)
+  -> (Name -> ExpQ)     -- ^ doc lookup (returns an ExpQ String)
+  -> Name               -- ^ constructor for *argument* definition
+  -> Name               -- ^ constructor for *top level* definition
+  -> ExpQ               -- ^ resulting splice: @[Definition]@
+deriveDefinitions tyName lookupDoc argCon defCon = do
+  TyConI (DataD _ _ _ _ cons _) <- reify tyName
+  listE (map build cons)             -- build :: Con -> ExpQ
+  where
+    ------------------------------------------------------------------------
+    -- | Build a definition value for one constructor of the ADT.
+    ------------------------------------------------------------------------
+    build :: Con -> ExpQ               -- *** returns ExpQ ***
+    build (RecC conName fields) = do
+      descrQ <- lookupDoc conName                  -- ExpQ String
+      let argQs :: [ExpQ]
+          argQs = map mkField fields               -- one ExpQ per field
+      argsListQ <- listE argQs                    -- ExpQ [ArgDef]
+      [| $(conE defCon)
+           $(litE $ stringL (snakeCase (nameBase conName))) $(pure descrQ)
+           $(pure argsListQ) |]
+
+    build (NormalC conName tys) = do
+      descrQ <- lookupDoc conName
+      let argQs :: [ExpQ]
+          argQs = map mkPos (zip [1 :: Int ..] (map snd tys))
+      argsListQ <- listE argQs
+      [| $(conE defCon)
+           $(litE $ stringL (snakeCase (nameBase conName))) $(pure descrQ)
+           $(pure argsListQ) |]
+
+    build other = fail ("deriveDefinitions: unsupported constructor " ++ show other)
+
+    ------------------------------------------------------------------------
+    -- | Build an argument definition for a *record* field.
+    ------------------------------------------------------------------------
+    mkField :: VarBangType -> ExpQ     -- ExpQ ArgDef
+    mkField (fName, _, fTy) = do
+      let (_, optional) = stripMaybe fTy
+          reqFlag :: ExpQ
+          reqFlag = if optional then [| False |] else [| True |]
+      docQ <- lookupDoc fName
+      [| $(conE argCon)
+           $(litE $ stringL (nameBase fName))
+           $(pure docQ)
+           $reqFlag |]
+
+    ------------------------------------------------------------------------
+    -- | Build an argument definition for a positional constructor field.
+    ------------------------------------------------------------------------
+    mkPos :: (Int, Type) -> ExpQ        -- ExpQ ArgDef
+    mkPos (ix, ty) = do
+      let argName = "arg_" ++ show ix
+          (_, optional) = stripMaybe ty
+          reqFlag :: ExpQ
+          reqFlag = if optional then [| False |] else [| True |]
+          fName   = mkName argName
+      docQ <- lookupDoc fName
+      [| $(conE argCon)
+           $(litE $ stringL argName)
+           $(pure docQ)
+           $reqFlag |]
 
 deriveInvokePrompt :: Name -> Q [Dec]
 deriveInvokePrompt adtName = do
@@ -300,36 +268,3 @@ deriveInvokeTool adtName = do
           chain acc nxt = [| $acc <*> $nxt |]
           combined = foldl' chain startExp fieldExps
       combined
-
-instance ToJSON PromptArgumentDefinition where
-  toJSON (PromptArgumentDefinition name desc required) = object
-    [ fromString "name" .= name
-    , fromString "description" .= desc
-    , fromString "required" .= required
-    ]
-
-instance ToJSON PromptDefinition where
-  toJSON (PromptDefinition name desc args) = object
-    [ fromString "name" .= name
-    , fromString "description" .= desc
-    , fromString "arguments" .= args
-    ]
-
-instance ToJSON ToolDefinition where
-  toJSON (ToolDefinition name desc args) = object
-    [ fromString "name"        .= name
-    , fromString "description" .= desc
-    , fromString "inputSchema" .= toolSchema args
-    ]
-    where
-      toolSchema :: [ToolArgumentDefinition] -> A.Value
-      toolSchema as = object
-        [ fromString "type"       .= ("object" :: String)
-        , fromString "properties" .= object (map argProp as)
-        , fromString "required"   .= [ n | ToolArgumentDefinition n _ True <- as ]
-        ]
-      argProp (ToolArgumentDefinition n d _) =
-        (fromString n) .= object
-          [ fromString "type"        .= ("string" :: String)
-          , fromString "description" .= d
-          ]
