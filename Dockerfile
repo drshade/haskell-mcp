@@ -4,7 +4,7 @@ RUN cabal update
 
 # Copy and build
 WORKDIR /app
-COPY sfdc-mcp.cabal /app
+COPY haskell-mcp.cabal /app
 COPY CHANGELOG.md /app
 COPY LICENSE /app
 
@@ -15,4 +15,4 @@ RUN cabal build
 RUN cabal install --installdir=/usr/local/bin
 
 # Set the entrypoint
-ENTRYPOINT ["/usr/local/bin/sfdc-mcp"]
+ENTRYPOINT ["/usr/local/bin/haskell-mcp"]

@@ -1,1 +1,1 @@
-docker build -t sfdc-mcp:latest .
+docker build -t haskell-mcp:latest .
