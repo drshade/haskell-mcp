@@ -5,11 +5,14 @@ module Examples.Salesforce.Demo where
 import           Control.Monad.IO.Class (liftIO)
 import           Data.Aeson             (FromJSON (..), Value, withObject, (.:),
                                          (.:?))
-import           Data.Aeson.Types       (parseEither)
+import           Data.Aeson.Types       (Parser, parseEither)
 import           Data.ByteString        (ByteString)
 import           Data.Text              (Text)
 import qualified Data.Text              as T
 import qualified Data.Text.Encoding     as TE
+import           Data.Time              (UTCTime (..), defaultTimeLocale,
+                                         parseTimeM)
+import           Data.Time.Calendar     (Day)
 import           Network.HTTP.Req       (header)
 import           Network.HTTP.Req       hiding (header)
 import           Network.OAuth.OAuth2   (AccessToken (..))
@@ -26,7 +29,7 @@ readCredentials :: IO (Text, Text, Text, Text)
 readCredentials = do
     let filename :: String
         filename = ".credential-salesforce"
-    putStrLn $ "🔐  Reading credentials from file " <> filename
+    -- putStrLn $ "🔐  Reading credentials from file " <> filename
     credentials <- tryIOError $ readFile filename
     case credentials of
         Left _ -> do
@@ -38,18 +41,25 @@ readCredentials = do
 
 
 data Opportunity = Opportunity
-  { oppId     :: !Text
-  , oppName   :: !Text
-  , closeDate :: !Text
-  , stageName :: !Text
-  , amount    :: !(Maybe Double)
+  { oppId        :: !String
+  , oppName      :: !String
+  , oppCloseDate :: !UTCTime
+  , oppStageName :: !String
+  , oppAmount    :: !(Maybe Double)
   } deriving Show
+
+parseDate :: Text -> Parser UTCTime
+parseDate t =
+  case parseTimeM True defaultTimeLocale "%F" (T.unpack t) :: Maybe Day of
+    Just day -> pure (UTCTime day 0)          -- midnight UTC
+    Nothing  -> fail $ "Invalid CloseDate: " <> T.unpack t
 
 instance FromJSON Opportunity where
   parseJSON = withObject "Opportunity" $ \v ->
     Opportunity <$> v .:  "Id"
                 <*> v .:  "Name"
-                <*> v .:  "CloseDate"
+                -- Parse from "2025-02-28"
+                <*> (v .: "CloseDate" >>= parseDate)
                 <*> v .:  "StageName"
                 <*> v .:? "Amount"
 
@@ -146,6 +156,12 @@ queryAll tok yr = runReq defaultHttpConfig (go initialUri queryOpt [])
 ----------------------------------------------------------------------
 -- 3.  Entrypoint
 ----------------------------------------------------------------------
+
+getOpportunities :: IO [Opportunity]
+getOpportunities = do
+  token <- getToken
+  opps  <- queryAll token 2025
+  pure opps
 
 demo :: IO ()
 demo = do

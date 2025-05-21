@@ -58,6 +58,7 @@ executable haskell-mcp
     Examples.Planets.Interface
     Examples.Salesforce.Demo
     Examples.Salesforce.Handlers
+    Examples.Salesforce.Interface
     MCP.Derive
     MCP.Server
     MCP.Spec
@@ -79,7 +80,10 @@ executable haskell-mcp
     stm,
     template-haskell,
     text,
+    time,
 
+  -- web-routes,
+  -- web-routes-th,
   -- Directories containing source files.
   hs-source-dirs: app
   -- Base language which the package is written in.

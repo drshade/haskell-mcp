@@ -22,3 +22,7 @@ executeTool GetAllGames                 = pure "List of all games: [Game1, Game2
 executeTool (GetGameStatus gameid)      = pure $ "The status of game " ++ gameid ++ " is: RUNNING"
 executeTool (MessagePlayers message)    = pure $ "Message sent to players: " ++ message
 
+executeResource :: Resource -> IO String
+executeResource Players        = pure "List of all players: [Player1, Player2, Player3]"
+executeResource ShipTypes     = pure "List of all ship types: [Ship1, Ship2, Ship3]"
+executeResource (PlayerInfo playerid) = pure $ "Information for player " ++ playerid ++ ": [Info1, Info2, Info3]"

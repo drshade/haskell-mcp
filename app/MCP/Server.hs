@@ -24,12 +24,20 @@ import           Optics                     ((^.))
 import           System.IO                  (BufferMode (LineBuffering),
                                              hPutStrLn, hSetBuffering, stderr,
                                              stdin, stdout)
+
+data McpServerInfo = McpServerInfo
+  { serverName         :: String
+  , serverVersion      :: String
+  , serverInstructions :: String
+  } deriving (Show)
+
 -- | JSON structure for params of "prompts/get"
 runMcpServerStdIn
-  :: [PromptDefinition] -> (PromptInvocation -> Either String p) -> (p -> IO String)
+  :: McpServerInfo
+  -> [PromptDefinition] -> (PromptInvocation -> Either String p) -> (p -> IO String)
   -> [ToolDefinition] -> (ToolInvocation -> Either String t) -> (t -> IO String)
   -> IO ()
-runMcpServerStdIn prompts promptInv promptExec tools toolInv toolExec = do
+runMcpServerStdIn info prompts promptInv promptExec tools toolInv toolExec = do
   -- Claude Desktop launches the binary and speaks line‑delimited JSON over
   -- stdio.  Line buffering keeps latency low and works cross‑platform.
   hSetBuffering stdin  LineBuffering
@@ -49,7 +57,7 @@ runMcpServerStdIn prompts promptInv promptExec tools toolInv toolExec = do
 
     -- Attempt to decode as a request
     case decode msg :: Maybe RpcRequest of
-      Just request -> handleRequest prompts promptInv promptExec tools toolInv toolExec outChan request
+      Just request -> handleRequest info prompts promptInv promptExec tools toolInv toolExec outChan request
       Nothing  ->
         case decode msg :: Maybe RpcNotification of
             Just notification -> handleNotification notification
@@ -86,20 +94,21 @@ handleNotification _notification = do
   pure ()
 
 handleRequest
-  :: [PromptDefinition] -> (PromptInvocation -> Either String p) -> (p -> IO String)
+  :: McpServerInfo
+  -> [PromptDefinition] -> (PromptInvocation -> Either String p) -> (p -> IO String)
   -> [ToolDefinition] -> (ToolInvocation -> Either String t) -> (t -> IO String)
   -> TChan BL.ByteString -> RpcRequest -> IO ()
-handleRequest prompts promptInv promptExec tools toolInv toolExec outChan req = do
+handleRequest info prompts promptInv promptExec tools toolInv toolExec outChan req = do
   hPutStrLn stderr $ "Received: " ++ show req
   case req ^. rpcRequestMethod of
     "initialize" ->
       sendResult outChan (req ^. rpcRequestId) $ object
         [ "protocolVersion" .= String "2024-11-05"
         , "serverInfo"      .= object
-            [ "name"    .= String "Planet-MCP-Server"
-            , "version" .= String "1.0.0"
+            [ "name"    .= String (T.pack $ serverName info)
+            , "version" .= String (T.pack $ serverVersion info)
             ]
-        , "instructions" .= String "Provides access to Planets.nu (VGAPlanets) game state!"
+        , "instructions" .= String (T.pack $ serverInstructions info)
         , "capabilities" .= object
             [ "logging" .= object []
             , "prompts" .= object []
