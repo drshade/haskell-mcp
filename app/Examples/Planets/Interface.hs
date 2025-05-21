@@ -9,6 +9,11 @@ data Tool
     | GetGameStatus  { gameid :: String  }
     | MessagePlayers { message :: String }
 
+data Resource
+    = Players
+    | ShipTypes
+    | PlayerInfo { playerid :: String }
+
 promptDoc :: DocTable
 promptDoc = fromList
   -- constructor docs
@@ -28,4 +33,13 @@ toolDoc = fromList
   -- field-level docs
   , ( "gameid",             "ID of the game to query" )
   , ( "message",            "Message to send to players" )
+  ]
+
+resourceDoc :: DocTable
+resourceDoc = fromList
+  -- constructor docs
+  [ ( "Players" , "List of all players in the game" )
+  , ( "ShipTypes", "List of all ship types available" )
+
+  -- field-level docs
   ]

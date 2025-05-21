@@ -21,6 +21,9 @@ data PromptDefinition = MkPromptDefinition String String [PromptArgumentDefiniti
 data ToolDefinition = MkToolDefinition String String [ToolArgumentDefinition]
   deriving (Show)
 
+data ResourceDefinition = MkResourceDefinition String String String String
+  deriving (Show)
+
 data ArgumentInvocation = MkArgumentInvocation String String
   deriving (Show)
 
@@ -64,3 +67,11 @@ instance ToJSON ToolDefinition where
           [ fromString "type"        .= ("string" :: String)
           , fromString "description" .= d
           ]
+
+instance ToJSON ResourceDefinition where
+  toJSON (MkResourceDefinition uri name desc mimeType) = object
+    [ fromString "uri"         .= uri
+    , fromString "name"        .= name
+    , fromString "description" .= desc
+    , fromString "mimeType"    .= mimeType
+    ]

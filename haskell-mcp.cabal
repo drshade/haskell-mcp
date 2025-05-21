@@ -56,6 +56,8 @@ executable haskell-mcp
   other-modules:
     Examples.Planets.Handlers
     Examples.Planets.Interface
+    Examples.Salesforce.Demo
+    Examples.Salesforce.Handlers
     MCP.Derive
     MCP.Server
     MCP.Spec
@@ -69,7 +71,11 @@ executable haskell-mcp
     base,
     bytestring,
     containers,
+    directory,
+    hoauth2,
+    modern-uri,
     optics,
+    req,
     stm,
     template-haskell,
     text,
