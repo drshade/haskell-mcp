@@ -73,9 +73,23 @@ query tok soql = do
     tokenBs :: AccessToken -> ByteString
     tokenBs (AccessToken t) = TE.encodeUtf8 t
 
+    -- | Turn a record (JSON object) into a single CSV line.
+    --   * Primitive values are rendered via 'valueToText'.
+    --   * Nested objects are flattened depth‑first; their primitive leaves
+    --     are appended in field order, ignoring any \"attributes\" node that
+    --     Salesforce adds for sub‑objects.
     recordToCSV :: Value -> String
-    recordToCSV (Object o) = intercalate "," $ map valueToText (KM.elems o)
-    recordToCSV _          = ""
+    recordToCSV (Object o) = intercalate "," (concatMap flatten (KM.elems o'))
+      where
+        -- Drop the auto‑generated "attributes" wrapper field
+        o' = KM.delete "attributes" o
+
+        flatten :: Value -> [String]
+        flatten (Object inner) = concatMap flatten (KM.elems (KM.delete "attributes" inner))
+        flatten v              = [valueToText v]
+
+    -- Fallback for non‑object values (shouldn't normally happen).
+    recordToCSV v = valueToText v
 
     valueToText :: Value -> String
     valueToText (String t) = T.unpack t
