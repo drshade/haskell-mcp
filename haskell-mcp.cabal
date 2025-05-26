@@ -56,7 +56,7 @@ executable haskell-mcp
   other-modules:
     Examples.Planets.Handlers
     Examples.Planets.Interface
-    Examples.Salesforce.Demo
+    Examples.Salesforce.API
     Examples.Salesforce.Handlers
     Examples.Salesforce.Interface
     MCP.Derive

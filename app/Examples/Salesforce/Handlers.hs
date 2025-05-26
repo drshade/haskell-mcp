@@ -1,14 +1,8 @@
 module Examples.Salesforce.Handlers where
 
-import           Data.List                     (sortBy)
-import           Data.Maybe                    (fromMaybe, isJust)
-import           Data.Ord                      (comparing)
 import           Data.Time                     (UTCTime (..), defaultTimeLocale,
-                                                parseTimeM)
-import           Data.Time.Calendar            (fromGregorian)
-import           Examples.Salesforce.Demo      (Opportunity (..),
-                                                getOpportunities)
-import qualified Examples.Salesforce.Demo      as Demo
+                                                formatTime, parseTimeM)
+import qualified Examples.Salesforce.API       as API
 import           Examples.Salesforce.Interface
 import           MCP.Derive
 import           MCP.Types                     (PromptDefinition,
@@ -28,33 +22,26 @@ executePrompt NoPrompt = pure "No prompt provided"
 
 executeTool :: Tool -> IO String
 executeTool (GetForecast start end) = do
-    opps <- getOpportunities
-    startdate :: UTCTime <- parseTimeM True defaultTimeLocale "%Y-%m-%d" start
-    enddate :: UTCTime <- parseTimeM True defaultTimeLocale "%Y-%m-%d" end
-    -- convert to csv string and return
-    let csv =
-            unlines
-            $ map (\opp ->
-                oppName opp ++ ","
-                ++ oppOwnerName opp ++ ","
-                ++ (show $ oppCloseDate opp) ++ ","
-                ++ oppStageName opp ++ ","
-                ++ "ZAR " ++ (show $ fromMaybe 0 $ oppAmount opp)
-            )
-            $ filter (\opp ->
-                (isJust $ oppAmount opp)
-                && (oppStageName opp /= "Closed Won")
-                && (oppStageName opp /= "Closed Lost")
-                && (oppCloseDate opp >= startdate)
-                && (oppCloseDate opp <= enddate)
-            )
-            $ sortBy (comparing oppCloseDate)
-            opps
-    pure csv
-executeTool (RunSoqlQuery query) = do
-    token   <- Demo.getToken
-    results <- Demo.query token query
+    token   <- API.getToken
+
+    startdate <- parseTimeM True defaultTimeLocale "%Y-%m-%d" start
+    enddate <- parseTimeM True defaultTimeLocale "%Y-%m-%d" end
+
+    results <- API.query token $ "SELECT Id, Name, Owner.Name, CloseDate, StageName, Amount \
+                                 \FROM Opportunity \
+                                 \WHERE CloseDate >= " <> formatDate startdate <>
+                                 " AND CloseDate <= " <> formatDate enddate <>
+                                 " AND StageName NOT IN ('Closed Won', 'Closed Lost')"
     pure $ unlines results
+  where
+    formatDate :: UTCTime -> String
+    formatDate date = formatTime defaultTimeLocale "%Y-%m-%d" date
+
+executeTool (RunSoqlQuery query) = do
+    token   <- API.getToken
+    results <- API.query token query
+    pure $ unlines results
+
 executeTool Approve = pure "Approved"
 executeTool Reject = pure "Rejected"
 
