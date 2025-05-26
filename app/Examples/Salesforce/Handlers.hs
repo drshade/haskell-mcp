@@ -32,7 +32,8 @@ executeTool (GetForecast start end) = do
                                  \WHERE CloseDate >= " <> formatDate startdate <>
                                  " AND CloseDate <= " <> formatDate enddate <>
                                  " AND StageName NOT IN ('Closed Won', 'Closed Lost')"
-    pure $ unlines results
+
+    pure $ either id unlines results
   where
     formatDate :: UTCTime -> String
     formatDate date = formatTime defaultTimeLocale "%Y-%m-%d" date
@@ -40,7 +41,7 @@ executeTool (GetForecast start end) = do
 executeTool (RunSoqlQuery query) = do
     token   <- API.getToken
     results <- API.query token query
-    pure $ unlines results
+    pure $ either id unlines results
 
 executeTool Approve = pure "Approved"
 executeTool Reject = pure "Rejected"

@@ -2,6 +2,7 @@
 
 module Examples.Salesforce.API where
 
+import           Control.Exception      (SomeException, displayException, try)
 import           Control.Monad.IO.Class (liftIO)
 import           Data.Aeson             (Value (..), withObject, (.:), (.:?))
 import qualified Data.Aeson.KeyMap      as KM
@@ -51,8 +52,13 @@ getToken = do
     Right tokTxt -> pure (AccessToken tokTxt)
     Left err     -> fail ("OAuth response parse failed: " <> err)
 
-query :: AccessToken -> String -> IO [String]
-query tok soql = runReq defaultHttpConfig (go initialUri queryOpt [])
+query :: AccessToken -> String -> IO (Either String [String])
+query tok soql = do
+  -- Catch any Req-level exceptions (network errors, non‑2xx, etc.)
+  result <- try $ runReq defaultHttpConfig (go initialUri queryOpt [])
+  case result of
+    Left  (ex :: SomeException) -> pure (Left (displayException ex))
+    Right res                   -> pure res
   where
     apiVer      = "v60.0" :: Text
     domain      = "https://synthesis3.my.salesforce.com" :: Text
@@ -77,34 +83,34 @@ query tok soql = runReq defaultHttpConfig (go initialUri queryOpt [])
     valueToText (Bool b)   = show b
     valueToText _          = ""
 
-    go :: URI -> Option 'Https -> [String] -> Req [String]
+    -- | Walk the pagination chain.  Accumulates rows or bails out with Left.
+    go :: URI -> Option 'Https -> [String] -> Req (Either String [String])
     go uri extraOpts acc =
       case useHttpsURI uri of
-        Nothing -> liftIO (fail "Malformed URI")
+        Nothing -> pure (Left "Malformed URI")
         Just (url', optsFromUri) -> do
           let authHdr      = "Bearer " <> tokenBs tok
               combinedOpts = optsFromUri <> extraOpts <> header "Authorization" authHdr
           r <- req GET url' NoReqBody jsonResponse combinedOpts
 
           let body = responseBody r :: Value
-          (recs, more) <- liftIO $ case parseEither
-                             ( withObject "QueryResponse" $ \o -> do
-                                 rs  <- o .:  "records"
-                                 nxt <- o .:? "nextRecordsUrl"
-                                 pure (rs :: [Value], nxt :: Maybe Text)
-                             ) body of
-                         Left err     -> fail (show body <> "\nSOQL parse error: " <> err)
-                         Right parsed -> pure parsed
-
-          let rowStrings = map recordToCSV recs
-              acc'       = acc ++ rowStrings
-          case more of
-            Nothing       -> pure acc'
-            Just nextPath -> do
-              let nextUriText = domain <> nextPath
-              case URI.mkURI nextUriText of
-                Just nextUri -> go nextUri mempty acc'
-                Nothing      -> liftIO (fail "Malformed nextRecordsUrl")
+          case parseEither
+                 ( withObject "QueryResponse" $ \o -> do
+                     rs  <- o .:  "records"
+                     nxt <- o .:? "nextRecordsUrl"
+                     pure (rs :: [Value], nxt :: Maybe Text)
+                 ) body of
+            Left err -> pure (Left ("SOQL parse error: " <> err))
+            Right (recs, more) -> do
+              let rowStrings = map recordToCSV recs
+                  acc'       = acc ++ rowStrings
+              case more of
+                Nothing       -> pure (Right acc')
+                Just nextPath ->
+                  let nextUriText = domain <> nextPath
+                  in case URI.mkURI nextUriText of
+                       Just nextUri -> go nextUri mempty acc'
+                       Nothing      -> pure (Left "Malformed nextRecordsUrl")
 
 demo :: IO ()
 demo = do
@@ -116,6 +122,8 @@ demo = do
                                  \WHERE CloseDate >= 2025-05-01 \
                                  \ AND CloseDate <= 2025-05-31 \
                                  \ AND StageName NOT IN ('Closed Won', 'Closed Lost')"
-  putStrLn $ "✅  Pulled " ++ show (length opps) ++ " rows"
-  putStrLn $ show opps
-
+  case opps of
+    Left err   -> putStrLn ("❌  Query failed: " <> err)
+    Right rows -> do
+      putStrLn $ "✅  Pulled " ++ show (length rows) ++ " rows"
+      print rows
