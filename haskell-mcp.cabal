@@ -81,6 +81,7 @@ executable haskell-mcp
     template-haskell,
     text,
     time,
+    unordered-containers,
 
   -- web-routes,
   -- web-routes-th,

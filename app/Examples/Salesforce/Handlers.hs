@@ -8,6 +8,7 @@ import           Data.Time                     (UTCTime (..), defaultTimeLocale,
 import           Data.Time.Calendar            (fromGregorian)
 import           Examples.Salesforce.Demo      (Opportunity (..),
                                                 getOpportunities)
+import qualified Examples.Salesforce.Demo      as Demo
 import           Examples.Salesforce.Interface
 import           MCP.Derive
 import           MCP.Types                     (PromptDefinition,
@@ -50,7 +51,10 @@ executeTool (GetForecast start end) = do
             $ sortBy (comparing oppCloseDate)
             opps
     pure csv
-executeTool (RunSOQL query) = pure "TBD: RunSOQL not implemented yet"
+executeTool (RunSoqlQuery query) = do
+    token   <- Demo.getToken
+    results <- Demo.query token query
+    pure $ unlines results
 executeTool Approve = pure "Approved"
 executeTool Reject = pure "Rejected"
 

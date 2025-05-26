@@ -4,10 +4,12 @@ module Examples.Salesforce.Demo where
 
 import           Control.Monad          ((>=>))
 import           Control.Monad.IO.Class (liftIO)
-import           Data.Aeson             (FromJSON (..), Value, withObject, (.:),
-                                         (.:?))
+import           Data.Aeson             (FromJSON (..), Value (..), withObject,
+                                         (.:), (.:?))
+import qualified Data.Aeson.KeyMap      as KM
 import           Data.Aeson.Types       (Parser, parseEither)
 import           Data.ByteString        (ByteString)
+import           Data.List              (intercalate)
 import           Data.Text              (Text)
 import qualified Data.Text              as T
 import qualified Data.Text.Encoding     as TE
@@ -105,6 +107,62 @@ soqlForYear yr =
 
 tokenBs :: AccessToken -> ByteString
 tokenBs (AccessToken t) = TE.encodeUtf8 t
+
+----------------------------------------------------------------------
+-- Generic SOQL query returning comma-separated string results
+----------------------------------------------------------------------
+
+query :: AccessToken -> String -> IO [String]
+query tok soql = runReq defaultHttpConfig (go initialUri queryOpt [])
+  where
+    apiVer      = "v60.0" :: Text
+    domain      = "https://synthesis3.my.salesforce.com" :: Text
+
+    baseUriText = domain <> "/services/data/" <> apiVer <> "/query"
+    initialUri  = case URI.mkURI baseUriText of
+                    Just u  -> u
+                    Nothing -> error $ "Invalid base URI: " <> T.unpack baseUriText
+
+    queryOpt    = "q" =: T.pack soql
+
+    go :: URI -> Option 'Https -> [String] -> Req [String]
+    go uri extraOpts acc =
+      case useHttpsURI uri of
+        Nothing -> liftIO (fail "Malformed URI")
+        Just (url', optsFromUri) -> do
+          let authHdr      = "Bearer " <> tokenBs tok
+              combinedOpts = optsFromUri <> extraOpts <> header "Authorization" authHdr
+          r <- req GET url' NoReqBody jsonResponse combinedOpts
+
+          let body = responseBody r :: Value
+          (recs, more) <- liftIO $ case parseEither
+                             ( withObject "QueryResponse" $ \o -> do
+                                 rs  <- o .:  "records"
+                                 nxt <- o .:? "nextRecordsUrl"
+                                 pure (rs :: [Value], nxt :: Maybe Text)
+                             ) body of
+                         Left err     -> fail (show body <> "\nSOQL parse error: " <> err)
+                         Right parsed -> pure parsed
+
+          let rowStrings = map recordToCSV recs
+              acc'       = acc ++ rowStrings
+          case more of
+            Nothing       -> pure acc'
+            Just nextPath -> do
+              let nextUriText = domain <> nextPath
+              case URI.mkURI nextUriText of
+                Just nextUri -> go nextUri mempty acc'
+                Nothing      -> liftIO (fail "Malformed nextRecordsUrl")
+
+recordToCSV :: Value -> String
+recordToCSV (Object o) = intercalate "," $ map valueToText (KM.elems o)
+recordToCSV _          = ""
+
+valueToText :: Value -> String
+valueToText (String t) = T.unpack t
+valueToText (Number n) = show n
+valueToText (Bool b)   = show b
+valueToText _          = ""
 
 ----------------------------------------------------------------------
 -- 2.  Run SOQL, follow nextRecordsUrl if present

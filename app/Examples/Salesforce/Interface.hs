@@ -7,7 +7,7 @@ data Prompt = NoPrompt
 
 data Tool
   = GetForecast { startdate :: String, enddate :: String }
-  | RunSOQL { query :: String }
+  | RunSoqlQuery { query :: String }
   | Approve
   | Reject
 
