@@ -3,7 +3,8 @@ module Examples.Salesforce.Handlers where
 import           Data.List                     (sortBy)
 import           Data.Maybe                    (fromMaybe, isJust)
 import           Data.Ord                      (comparing)
-import           Data.Time                     (UTCTime (..))
+import           Data.Time                     (UTCTime (..), defaultTimeLocale,
+                                                parseTimeM)
 import           Data.Time.Calendar            (fromGregorian)
 import           Examples.Salesforce.Demo      (Opportunity (..),
                                                 getOpportunities)
@@ -25,13 +26,16 @@ executePrompt :: Prompt -> IO String
 executePrompt NoPrompt = pure "No prompt provided"
 
 executeTool :: Tool -> IO String
-executeTool GetForecast = do
+executeTool (GetForecast start end) = do
     opps <- getOpportunities
+    startdate :: UTCTime <- parseTimeM True defaultTimeLocale "%Y-%m-%d" start
+    enddate :: UTCTime <- parseTimeM True defaultTimeLocale "%Y-%m-%d" end
     -- convert to csv string and return
-    let csvString =
+    let csv =
             unlines
             $ map (\opp ->
                 oppName opp ++ ","
+                ++ oppOwnerName opp ++ ","
                 ++ (show $ oppCloseDate opp) ++ ","
                 ++ oppStageName opp ++ ","
                 ++ "ZAR " ++ (show $ fromMaybe 0 $ oppAmount opp)
@@ -40,10 +44,13 @@ executeTool GetForecast = do
                 (isJust $ oppAmount opp)
                 && (oppStageName opp /= "Closed Won")
                 && (oppStageName opp /= "Closed Lost")
-                && (oppCloseDate opp < (UTCTime (fromGregorian 2025 9 1) 0))
+                && (oppCloseDate opp >= startdate)
+                && (oppCloseDate opp <= enddate)
             )
             $ sortBy (comparing oppCloseDate)
             opps
-    pure csvString
-
+    pure csv
+executeTool (RunSOQL query) = pure "TBD: RunSOQL not implemented yet"
+executeTool Approve = pure "Approved"
+executeTool Reject = pure "Rejected"
 

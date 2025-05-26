@@ -33,3 +33,4 @@ data RpcNotification = RpcNotification
 
 makeLenses ''RpcNotification
 deriveJSON defaultOptions { fieldLabelModifier = fmap toLower . drop (length ("_rpcNotification" :: String)) } ''RpcNotification
+

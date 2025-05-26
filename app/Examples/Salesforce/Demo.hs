@@ -2,6 +2,7 @@
 
 module Examples.Salesforce.Demo where
 
+import           Control.Monad          ((>=>))
 import           Control.Monad.IO.Class (liftIO)
 import           Data.Aeson             (FromJSON (..), Value, withObject, (.:),
                                          (.:?))
@@ -43,6 +44,7 @@ readCredentials = do
 data Opportunity = Opportunity
   { oppId        :: !String
   , oppName      :: !String
+  , oppOwnerName :: !String
   , oppCloseDate :: !UTCTime
   , oppStageName :: !String
   , oppAmount    :: !(Maybe Double)
@@ -55,13 +57,15 @@ parseDate t =
     Nothing  -> fail $ "Invalid CloseDate: " <> T.unpack t
 
 instance FromJSON Opportunity where
-  parseJSON = withObject "Opportunity" $ \v ->
-    Opportunity <$> v .:  "Id"
-                <*> v .:  "Name"
-                -- Parse from "2025-02-28"
-                <*> (v .: "CloseDate" >>= parseDate)
-                <*> v .:  "StageName"
-                <*> v .:? "Amount"
+  parseJSON :: Value -> Parser Opportunity
+  parseJSON = withObject "Opportunity" $ \v -> do
+    oppId        <- v .:  "Id"
+    oppName      <- v .:  "Name"
+    ownerName    <- v .: "Owner" >>= (.: "Name")
+    closeDate    <- v .: "CloseDate" >>= parseDate    -- your helper
+    stage        <- v .:  "StageName"
+    amount       <- v .:? "Amount"
+    pure (Opportunity oppId oppName ownerName closeDate stage amount)
 
 ----------------------------------------------------------------------
 -- 1.  Hit Salesforce's token endpoint (username-password flow)
@@ -91,7 +95,7 @@ getToken = do
 
 soqlForYear :: Int -> Text
 soqlForYear yr =
-  "SELECT Id, Name, CloseDate, StageName, Amount \
+  "SELECT Id, Name, Owner.Name, CloseDate, StageName, Amount \
   \FROM Opportunity \
   \WHERE CALENDAR_YEAR(CloseDate) = " <> T.pack (show yr)
 
@@ -133,6 +137,8 @@ queryAll tok yr = runReq defaultHttpConfig (go initialUri queryOpt [])
               combinedOpts = optsFromUri <> extraOpts <> header "Authorization" authHdr
           r <- req GET url' NoReqBody jsonResponse combinedOpts
 
+          let bodyText :: String
+              bodyText = show $ responseBody r
           let body = responseBody r :: Value
           (recs, more) <-
             liftIO $ case parseEither
@@ -141,7 +147,7 @@ queryAll tok yr = runReq defaultHttpConfig (go initialUri queryOpt [])
                                    nxt <- o .:? "nextRecordsUrl"
                                    pure (rs :: [Opportunity], nxt :: Maybe Text)
                                ) body of
-                       Left err     -> fail ("SOQL parse error: " <> err)
+                       Left err     -> fail (bodyText <> "\nSOQL parse error: " <> err)
                        Right parsed -> pure parsed
 
           let acc' = acc ++ recs
