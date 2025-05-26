@@ -17,8 +17,6 @@ promptDoc = fromList
   [ ( "NoPrompt" , "No prompt" )
 
   -- field-level docs
-  , ( "startdate", "The start date for records in the request, in the form '2025-03-01'" )
-  , ( "enddate"  , "The end date for records in the request, in the form '2025-03-01'" )
   ]
 
 toolDoc :: DocTable
@@ -27,5 +25,8 @@ toolDoc = fromList
   [ ( "GetForecast",     "Get the opportunities in the next 12 months" )
 
   -- field-level docs
+  , ( "startdate",    "The start date for records in the request, in the form '2025-03-01'" )
+  , ( "enddate"  ,    "The end date for records in the request, in the form '2025-03-01'" )
+  , ( "query",        "The SOQL query to run" )
   ]
 
