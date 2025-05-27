@@ -2,23 +2,22 @@
 
 module Examples.Salesforce.API where
 
-import           Control.Exception      (SomeException, displayException, try)
-import           Control.Monad.IO.Class (liftIO)
-import           Data.Aeson             (Value (..), withObject, (.:), (.:?))
-import qualified Data.Aeson.KeyMap      as KM
-import           Data.Aeson.Types       (parseEither)
-import           Data.ByteString        (ByteString)
-import           Data.List              (intercalate)
-import           Data.Text              (Text)
-import qualified Data.Text              as T
-import qualified Data.Text.Encoding     as TE
-import           Network.HTTP.Req       (header)
-import           Network.HTTP.Req       hiding (header)
-import           Network.OAuth.OAuth2   (AccessToken (..))
-import           System.Directory       (getCurrentDirectory)
-import           System.IO.Error        (tryIOError)
-import qualified Text.URI               as URI
-import           Text.URI               (URI)
+import           Control.Exception    (SomeException, displayException, try)
+import           Data.Aeson           (Value (..), withObject, (.:), (.:?))
+import qualified Data.Aeson.KeyMap    as KM
+import           Data.Aeson.Types     (parseEither)
+import           Data.ByteString      (ByteString)
+import           Data.List            (intercalate)
+import           Data.Text            (Text)
+import qualified Data.Text            as T
+import qualified Data.Text.Encoding   as TE
+import           Network.HTTP.Req     (header)
+import           Network.HTTP.Req     hiding (header)
+import           Network.OAuth.OAuth2 (AccessToken (..))
+import           System.Directory     (getCurrentDirectory)
+import           System.IO.Error      (tryIOError)
+import qualified Text.URI             as URI
+import           Text.URI             (URI)
 
 readCredentials :: IO (Text, Text, Text, Text)
 readCredentials = do

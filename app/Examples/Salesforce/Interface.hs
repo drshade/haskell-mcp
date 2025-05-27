@@ -10,6 +10,7 @@ data Tool
   | RunSoqlQuery { query :: String }
   | Approve
   | Reject
+  | ChangeSalesPerson { opporunityName :: String, newSalesPerson :: String }
 
 promptDoc :: DocTable
 promptDoc = fromList

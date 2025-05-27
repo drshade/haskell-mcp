@@ -1,5 +1,6 @@
 module Examples.Salesforce.Handlers where
 
+import           Data.HashMap.Internal.Array   (new)
 import           Data.Time                     (UTCTime (..), defaultTimeLocale,
                                                 formatTime, parseTimeM)
 import qualified Examples.Salesforce.API       as API
@@ -46,3 +47,8 @@ executeTool (RunSoqlQuery query) = do
 executeTool Approve = pure "Approved"
 executeTool Reject = pure "Rejected"
 
+executeTool (ChangeSalesPerson opportunityName newSalesPerson) = do
+    token <- API.getToken
+    if newSalesPerson /= "Neil Thomas" then
+        pure $ "Unable to change salesperson - could not find " <> newSalesPerson
+        else pure $ "Salesperson changed successfully"
