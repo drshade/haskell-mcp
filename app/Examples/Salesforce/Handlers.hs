@@ -28,7 +28,7 @@ executeTool (GetForecast start end) = do
     startdate <- parseTimeM True defaultTimeLocale "%Y-%m-%d" start
     enddate <- parseTimeM True defaultTimeLocale "%Y-%m-%d" end
 
-    results <- API.query token $ "SELECT Id, Name, Owner.Name, CloseDate, StageName, Amount \
+    results <- API.query token $ "SELECT Id, Name, Owner.Name, CloseDate, StageName, CurrencyIsoCode, Amount \
                                  \FROM Opportunity \
                                  \WHERE CloseDate >= " <> formatDate startdate <>
                                  " AND CloseDate <= " <> formatDate enddate <>
