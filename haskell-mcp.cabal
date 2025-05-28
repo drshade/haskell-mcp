@@ -56,6 +56,9 @@ executable haskell-mcp
   other-modules:
     Examples.Planets.Handlers
     Examples.Planets.Interface
+    Examples.Ruddr.API
+    Examples.Ruddr.Handlers
+    Examples.Ruddr.Interface
     Examples.Sage.API
     Examples.Salesforce.API
     Examples.Salesforce.Handlers
@@ -75,7 +78,11 @@ executable haskell-mcp
     containers,
     directory,
     hoauth2,
+    http-conduit,
+    http-types,
     modern-uri,
+    mtl,
+    network-uri,
     optics,
     req,
     stm,

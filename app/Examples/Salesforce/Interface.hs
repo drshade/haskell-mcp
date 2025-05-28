@@ -8,9 +8,6 @@ data Prompt = NoPrompt
 data Tool
   = GetForecast { startdate :: String, enddate :: String }
   | RunSoqlQuery { query :: String }
-  | Approve
-  | Reject
-  | ChangeSalesPerson { opporunityName :: String, newSalesPerson :: String }
 
 promptDoc :: DocTable
 promptDoc = fromList
