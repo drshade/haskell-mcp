@@ -3,8 +3,6 @@
 module Examples.Ruddr.Handlers where
 
 import qualified Data.Text                as T
-import           Data.Time                (UTCTime (..), defaultTimeLocale,
-                                           formatTime, parseTimeM)
 import           Examples.Ruddr.API       (getProjectsCsvWithSearch,
                                            newRuddrClient, runRuddr)
 import qualified Examples.Ruddr.API       as API

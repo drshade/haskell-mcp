@@ -4,11 +4,11 @@
 
 module Examples.Ruddr.API where
 
-import           Control.Monad.IO.Class    (MonadIO, liftIO)
+import           Control.Monad.IO.Class    (liftIO)
 import           Control.Monad.Reader      (ReaderT, ask, runReaderT)
 import           Data.Aeson
 import qualified Data.ByteString.Char8     as BS8
-import           Data.List                 (intercalate, isInfixOf)
+import           Data.List                 (intercalate)
 import           Data.Text                 (Text)
 import qualified Data.Text                 as T
 import           Data.Text.Encoding        (encodeUtf8)

@@ -40,4 +40,4 @@ mainRuddr =
         Ruddr.tools Ruddr.invokeTool Ruddr.executeTool
 
 main :: IO ()
-main = mainRuddr
+main = mainSalesforce
