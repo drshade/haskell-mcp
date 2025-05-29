@@ -63,6 +63,9 @@ executable haskell-mcp
     Examples.Salesforce.API
     Examples.Salesforce.Handlers
     Examples.Salesforce.Interface
+    Examples.Woolies.DB
+    Examples.Woolies.Handlers
+    Examples.Woolies.Interface
     MCP.Derive
     MCP.Server
     MCP.Spec
@@ -84,7 +87,9 @@ executable haskell-mcp
     mtl,
     network-uri,
     optics,
+    postgresql-simple,
     req,
+    scientific,
     stm,
     template-haskell,
     text,
