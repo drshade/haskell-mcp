@@ -1,6 +1,5 @@
 module Examples.Salesforce.Handlers where
 
-import           Data.HashMap.Internal.Array   (new)
 import           Data.Time                     (UTCTime (..), defaultTimeLocale,
                                                 formatTime, parseTimeM)
 import qualified Examples.Salesforce.API       as API
@@ -28,7 +27,7 @@ executeTool (GetForecast start end) = do
     startdate <- parseTimeM True defaultTimeLocale "%Y-%m-%d" start
     enddate <- parseTimeM True defaultTimeLocale "%Y-%m-%d" end
 
-    results <- API.query token $ "SELECT Id, Name, Owner.Name, CloseDate, StageName, Amount \
+    results <- API.query token $ "SELECT Id, Name, Owner.Name, CloseDate, StageName, CurrencyIsoCode, Amount \
                                  \FROM Opportunity \
                                  \WHERE CloseDate >= " <> formatDate startdate <>
                                  " AND CloseDate <= " <> formatDate enddate <>
@@ -44,11 +43,3 @@ executeTool (RunSoqlQuery query) = do
     results <- API.query token query
     pure $ either id unlines results
 
-executeTool Approve = pure "Approved"
-executeTool Reject = pure "Rejected"
-
-executeTool (ChangeSalesPerson opportunityName newSalesPerson) = do
-    token <- API.getToken
-    if newSalesPerson /= "Neil Thomas" then
-        pure $ "Unable to change salesperson - could not find " <> newSalesPerson
-        else pure $ "Salesperson changed successfully"
