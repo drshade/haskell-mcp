@@ -18,24 +18,19 @@ import           System.Directory     (getCurrentDirectory)
 import           System.IO.Error      (tryIOError)
 import qualified Text.URI             as URI
 import           Text.URI             (URI)
+import           System.Environment   (lookupEnv)
 
-readCredentials :: IO (Text, Text, Text, Text)
-readCredentials = do
-    let filename :: String
-        filename = ".credential-salesforce"
-    -- putStrLn $ "🔐  Reading credentials from file " <> filename
-    credentials <- tryIOError $ readFile filename
-    case credentials of
-        Left _ -> do
-            cwd <- getCurrentDirectory
-            error $ "Attempting to read " <> filename <> " file from working directory: " ++ cwd
-        Right contents -> case lines contents of
-            key : secret : username : password : _ -> pure (T.pack key, T.pack secret, T.pack username, T.pack password)
-            _ -> error $ "Expected 4 lines in a file named " <> filename <> " - key, secret, username, password"
+getCredentialsFromEnv :: IO (Text, Text, Text, Text)
+getCredentialsFromEnv = do
+    key      <- maybe (error "SALESFORCE_KEY environment variable not set") T.pack <$> lookupEnv "SALESFORCE_KEY"
+    secret   <- maybe (error "SALESFORCE_SECRET environment variable not set") T.pack <$> lookupEnv "SALESFORCE_SECRET"
+    username <- maybe (error "SALESFORCE_USERNAME environment variable not set") T.pack <$> lookupEnv "SALESFORCE_USERNAME"
+    password <- maybe (error "SALESFORCE_PASSWORD environment variable not set") T.pack <$> lookupEnv "SALESFORCE_PASSWORD"
+    pure (key, secret, username, password)
 
 getToken :: IO AccessToken
 getToken = do
-  (key, secret, username, password) <- readCredentials
+  (key, secret, username, password) <- getCredentialsFromEnv
   let loginUrl = "login.salesforce.com"
       creds =
                "grant_type"     =: ("password" :: Text)
