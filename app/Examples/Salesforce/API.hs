@@ -20,17 +20,29 @@ import qualified Text.URI             as URI
 import           Text.URI             (URI)
 import           System.Environment   (lookupEnv)
 
-getCredentialsFromEnv :: IO (Text, Text, Text, Text)
-getCredentialsFromEnv = do
-    key      <- maybe (error "SALESFORCE_KEY environment variable not set") T.pack <$> lookupEnv "SALESFORCE_KEY"
-    secret   <- maybe (error "SALESFORCE_SECRET environment variable not set") T.pack <$> lookupEnv "SALESFORCE_SECRET"
-    username <- maybe (error "SALESFORCE_USERNAME environment variable not set") T.pack <$> lookupEnv "SALESFORCE_USERNAME"
-    password <- maybe (error "SALESFORCE_PASSWORD environment variable not set") T.pack <$> lookupEnv "SALESFORCE_PASSWORD"
-    pure (key, secret, username, password)
+getCredentials :: IO (Text, Text, Text, Text)
+getCredentials = do
+    mKey      <- lookupEnv "SALESFORCE_KEY"
+    mSecret   <- lookupEnv "SALESFORCE_SECRET"
+    mUsername <- lookupEnv "SALESFORCE_USERNAME"
+    mPassword <- lookupEnv "SALESFORCE_PASSWORD"
+    case (mKey, mSecret, mUsername, mPassword) of
+      (Just key, Just secret, Just username, Just password) ->
+        pure (T.pack key, T.pack secret, T.pack username, T.pack password)
+      _ -> do
+        let filename = ".credential-salesforce"
+        credentials <- tryIOError $ readFile filename
+        case credentials of
+          Left _ -> do
+            cwd <- getCurrentDirectory
+            error $ "Attempting to read " <> filename <> " file from working directory: " ++ cwd
+          Right contents -> case lines contents of
+            key : secret : username : password : _ -> pure (T.pack key, T.pack secret, T.pack username, T.pack password)
+            _ -> error $ "Expected 4 lines in a file named " <> filename <> " - key, secret, username, password"
 
 getToken :: IO AccessToken
 getToken = do
-  (key, secret, username, password) <- getCredentialsFromEnv
+  (key, secret, username, password) <- getCredentials
   let loginUrl = "login.salesforce.com"
       creds =
                "grant_type"     =: ("password" :: Text)
