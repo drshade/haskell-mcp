@@ -27,8 +27,9 @@ COPY app /app/app
 RUN cabal build
 RUN cabal install --installdir=/usr/local/bin
 
-COPY .credential-salesforce /app
-COPY .credential-ruddr /app
+# Let's not bake these into the image
+# COPY .credential-salesforce /app
+# COPY .credential-ruddr /app
 
 # Set the entrypoint
 ENTRYPOINT ["/usr/local/bin/haskell-mcp"]

@@ -18,24 +18,31 @@ import           System.Directory     (getCurrentDirectory)
 import           System.IO.Error      (tryIOError)
 import qualified Text.URI             as URI
 import           Text.URI             (URI)
+import           System.Environment   (lookupEnv)
 
-readCredentials :: IO (Text, Text, Text, Text)
-readCredentials = do
-    let filename :: String
-        filename = ".credential-salesforce"
-    -- putStrLn $ "🔐  Reading credentials from file " <> filename
-    credentials <- tryIOError $ readFile filename
-    case credentials of
-        Left _ -> do
+getCredentials :: IO (Text, Text, Text, Text)
+getCredentials = do
+    mKey      <- lookupEnv "SALESFORCE_KEY"
+    mSecret   <- lookupEnv "SALESFORCE_SECRET"
+    mUsername <- lookupEnv "SALESFORCE_USERNAME"
+    mPassword <- lookupEnv "SALESFORCE_PASSWORD"
+    case (mKey, mSecret, mUsername, mPassword) of
+      (Just key, Just secret, Just username, Just password) ->
+        pure (T.pack key, T.pack secret, T.pack username, T.pack password)
+      _ -> do
+        let filename = ".credential-salesforce"
+        credentials <- tryIOError $ readFile filename
+        case credentials of
+          Left _ -> do
             cwd <- getCurrentDirectory
             error $ "Attempting to read " <> filename <> " file from working directory: " ++ cwd
-        Right contents -> case lines contents of
+          Right contents -> case lines contents of
             key : secret : username : password : _ -> pure (T.pack key, T.pack secret, T.pack username, T.pack password)
             _ -> error $ "Expected 4 lines in a file named " <> filename <> " - key, secret, username, password"
 
 getToken :: IO AccessToken
 getToken = do
-  (key, secret, username, password) <- readCredentials
+  (key, secret, username, password) <- getCredentials
   let loginUrl = "login.salesforce.com"
       creds =
                "grant_type"     =: ("password" :: Text)
