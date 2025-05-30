@@ -1,1 +1,1 @@
-docker build -t haskell-mcp:latest .
+docker build -t synthesis/mcp-server .
