@@ -114,7 +114,7 @@ instance FromJSON a => FromJSON (ApiResponse a) where
 readCredentials :: IO Text
 readCredentials = do
     let filename :: String
-        filename = ".credential-ruddr"
+        filename = "credentials/ruddr"
     -- putStrLn $ "🔐  Reading credentials from file " <> filename
     credentials <- tryIOError $ readFile filename
     case credentials of

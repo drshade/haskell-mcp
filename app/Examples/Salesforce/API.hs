@@ -15,10 +15,10 @@ import           Network.HTTP.Req     (header)
 import           Network.HTTP.Req     hiding (header)
 import           Network.OAuth.OAuth2 (AccessToken (..))
 import           System.Directory     (getCurrentDirectory)
+import           System.Environment   (lookupEnv)
 import           System.IO.Error      (tryIOError)
 import qualified Text.URI             as URI
 import           Text.URI             (URI)
-import           System.Environment   (lookupEnv)
 
 getCredentials :: IO (Text, Text, Text, Text)
 getCredentials = do
@@ -30,7 +30,7 @@ getCredentials = do
       (Just key, Just secret, Just username, Just password) ->
         pure (T.pack key, T.pack secret, T.pack username, T.pack password)
       _ -> do
-        let filename = ".credential-salesforce"
+        let filename = "credentials/salesforce"
         credentials <- tryIOError $ readFile filename
         case credentials of
           Left _ -> do

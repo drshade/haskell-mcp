@@ -20,7 +20,8 @@ promptDoc = fromList
 toolDoc :: DocTable
 toolDoc = fromList
   -- constructor docs
-  [ ( "GetForecast",     "Get the opportunities in the next 12 months" )
+  [ ( "GetForecast",     "Get the opportunities in Salesforce between two dates (these are only OPEN deals - ie not won or lost)" )
+  , ( "RunSoqlQuery",    "Run a SOQL query against the Salesforce database" )
 
   -- field-level docs
   , ( "startdate",    "The start date for records in the request, in the form '2025-03-01'" )
