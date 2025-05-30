@@ -19,7 +19,7 @@ promptDoc = fromList
 toolDoc :: DocTable
 toolDoc = fromList
   -- constructor docs
-  [ ( "GetProjects",    "Get a list of projects currently in delivery" )
+  [ ( "GetProjects",    "Get a list of projects in the Project Operations platform Ruddr currently in delivery" )
 
   -- field-level docs
   , ( "search",         "Matching this search criteria (optional, leave out for all)" )
