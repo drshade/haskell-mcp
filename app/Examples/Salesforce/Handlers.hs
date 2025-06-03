@@ -1,5 +1,7 @@
 module Examples.Salesforce.Handlers where
 
+import           Control.Monad.Except          (ExceptT (..), runExceptT)
+import           Control.Monad.Trans           (lift)
 import           Data.Time                     (UTCTime (..), defaultTimeLocale,
                                                 formatTime, parseTimeM)
 import qualified Examples.Salesforce.API       as API
@@ -43,3 +45,17 @@ executeTool (RunSoqlQuery query) = do
     results <- API.query token query
     pure $ either id unlines results
 
+executeTool (GetRecords objectType mFilters mFields mLimit) = do
+    result <- runExceptT $ do
+      validObjType <- ExceptT $ pure $ API.validateObjectType objectType
+      validFilters <- ExceptT $ pure $ API.validateFilters mFilters
+      let soqlQuery = API.buildGetRecordsQuery validObjType validFilters mFields mLimit
+      token <- lift API.getToken
+      rows <- ExceptT $ API.query token soqlQuery
+      let header = "Records from " ++ objectType ++ " (query: " ++ soqlQuery ++ ")"
+          separator = replicate (length header) '-'
+      pure $ unlines $ [header, separator] ++ rows
+
+    case result of
+      Left err     -> pure $ "Error: " ++ err
+      Right output -> pure output

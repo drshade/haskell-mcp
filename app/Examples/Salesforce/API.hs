@@ -132,6 +132,49 @@ query tok soql = do
                        Just nextUri -> go nextUri mempty acc'
                        Nothing      -> pure (Left "Malformed nextRecordsUrl")
 
+buildGetRecordsQuery :: String -> Maybe String -> Maybe String -> Maybe String -> String
+buildGetRecordsQuery objectType mFilters mFields mLimit =
+  let
+    -- Default fields for common objects
+    defaultFields = case objectType of
+      "Account"     -> "Id, Name, Type, Industry, Phone, Website, BillingCity, BillingState"
+      "Contact"     -> "Id, Name, Title, Email, Phone, Account.Name, Department"
+      "Opportunity" -> "Id, Name, StageName, Amount, CloseDate, Account.Name, Owner.Name"
+      "Lead"        -> "Id, Name, Email, Phone, Company, Status, LeadSource"
+      "Case"        -> "Id, CaseNumber, Subject, Status, Priority, Account.Name, Contact.Name"
+      "Task"        -> "Id, Subject, Status, Priority, ActivityDate, Who.Name, What.Name"
+      "Event"       -> "Id, Subject, StartDateTime, EndDateTime, Who.Name, What.Name"
+      _             -> "Id, Name"  -- Generic fallback
+
+    fields = case mFields of
+      Just f | not (null f) -> f
+      _                     -> defaultFields
+
+    whereClause = case mFilters of
+      Just f | not (null f) -> " WHERE " ++ f
+      _                     -> ""
+
+    limitClause = case mLimit of
+      Just l | not (null l) -> " LIMIT " ++ l
+      _                     -> " LIMIT 100"
+  in
+    "SELECT " ++ fields ++ " FROM " ++ objectType ++ whereClause ++ limitClause
+
+-- | Validate object type (basic validation)
+validateObjectType :: String -> Either String String
+validateObjectType objType
+  | null objType = Left "Object type cannot be empty"
+  | any (`elem` objType) ['\'', '"', ';', '\\'] = Left "Invalid characters in object type"
+  | otherwise = Right objType
+
+-- | Validate and sanitize filters
+validateFilters :: Maybe String -> Either String (Maybe String)
+validateFilters Nothing = Right Nothing
+validateFilters (Just filters)
+  | null filters = Right Nothing
+  | any (`elem` filters) ['\\'] = Left "Invalid characters in filters"
+  | otherwise = Right (Just filters)
+
 demo :: IO ()
 demo = do
   putStrLn "🔐  Fetching token..."
