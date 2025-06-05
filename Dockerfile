@@ -1,4 +1,5 @@
-FROM haskell:9.10
+# Build stage
+FROM haskell:9.10 AS builder
 
 RUN apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
@@ -26,6 +27,19 @@ RUN cabal build all --only-dependencies
 COPY app /app/app
 RUN cabal build
 RUN cabal install --installdir=/usr/local/bin
+
+# Runtime stage
+FROM debian:bullseye-slim
+
+RUN apt-get update && \
+    apt-get install -y \
+    libpq5 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /usr/local/bin/haskell-mcp /usr/local/bin/haskell-mcp
+
+WORKDIR /app
 
 # Let's not bake these into the image
 # COPY .credential-salesforce /app
