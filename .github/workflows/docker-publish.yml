@@ -43,7 +43,7 @@ jobs:
             synthesis/mcp-server:${{ steps.extract_tag.outputs.tag }}-amd64
 
   build-and-push-arm64:
-    runs-on: ubuntu-24.04-arm64
+    runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
