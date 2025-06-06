@@ -37,7 +37,6 @@ jobs:
         with:
           context: .
           push: true
-          platforms: linux/amd64
           tags: |
             synthesis/mcp-server:latest-amd64
             synthesis/mcp-server:${{ steps.extract_tag.outputs.tag }}-amd64
@@ -71,7 +70,6 @@ jobs:
         with:
           context: .
           push: true
-          platforms: linux/arm64
           tags: |
             synthesis/mcp-server:latest-arm64
             synthesis/mcp-server:${{ steps.extract_tag.outputs.tag }}-arm64
